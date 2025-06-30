@@ -1,8 +1,8 @@
 use axum::{Router, routing::post};
+use std::env;
 
 mod routes;
 mod response;
-
 
 use routes::keypair::generate_keypair;
 use routes::message::{sign_message, verify_message};
@@ -20,9 +20,11 @@ async fn main() {
         .route("/send/sol", post(send_sol))
         .route("/send/token", post(send_token));
 
-    let address = "0.0.0.0:3000";
-    let listener = tokio::net::TcpListener::bind(address).await.unwrap();
+    let port = env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let addr = format!("0.0.0.0:{}", port);
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
 
-    println!("Server running at http://{}/", address);
+  
+    println!("Server running at http://{}/", addr);
     axum::serve(listener, app).await.unwrap();
 }
