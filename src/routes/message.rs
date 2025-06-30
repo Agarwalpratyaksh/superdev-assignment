@@ -1,4 +1,4 @@
-use axum::Json;
+use axum::{Json, http::StatusCode};
 use base64::{engine::general_purpose, Engine as _};
 use bs58;
 use serde::{Deserialize, Serialize};
@@ -8,7 +8,7 @@ use solana_sdk::{
 };
 use std::{convert::TryInto, str::FromStr};
 
-use crate::response::{ApiResponse, success, error}; // ✅ Import your helpers
+use crate::response::{ApiResponse, success, error};
 
 #[derive(Debug, Deserialize)]
 pub struct SignMessageRequest {
@@ -23,36 +23,58 @@ pub struct SignMessageData {
     message: String,
 }
 
-pub async fn sign_message(Json(payload): Json<SignMessageRequest>) -> Json<ApiResponse<SignMessageData>> {
+pub async fn sign_message(
+    Json(payload): Json<SignMessageRequest>,
+) -> (StatusCode, Json<ApiResponse<SignMessageData>>) {
     if payload.message.is_empty() || payload.secret.is_empty() {
-        return Json(error("Missing required fields"));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(error("Missing required fields")),
+        );
     }
 
     let decoded = match bs58::decode(&payload.secret).into_vec() {
         Ok(bytes) => bytes,
-        Err(_) => return Json(error("Invalid base58 secret key")),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(error("Invalid base58 secret key")),
+            );
+        }
     };
 
     let secret: [u8; 64] = match decoded.as_slice().try_into() {
         Ok(arr) => arr,
-        Err(_) => return Json(error("Invalid key length")),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(error("Invalid key length")),
+            );
+        }
     };
 
     let keypair = match Keypair::from_bytes(&secret) {
         Ok(kp) => kp,
-        Err(_) => return Json(error("Failed to parse keypair")),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(error("Failed to parse keypair")),
+            );
+        }
     };
 
     let signature = keypair.sign_message(payload.message.as_bytes());
     let signature_b64 = general_purpose::STANDARD.encode(signature.as_ref());
 
-    Json(success(SignMessageData {
-        signature: signature_b64,
-        public_key: keypair.pubkey().to_string(),
-        message: payload.message,
-    }))
+    (
+        StatusCode::OK,
+        Json(success(SignMessageData {
+            signature: signature_b64,
+            public_key: keypair.pubkey().to_string(),
+            message: payload.message,
+        })),
+    )
 }
-
 
 #[derive(Debug, Deserialize)]
 pub struct VerifyMessageRequest {
@@ -68,31 +90,54 @@ pub struct VerifyMessageData {
     pubkey: String,
 }
 
-pub async fn verify_message(Json(payload): Json<VerifyMessageRequest>) -> Json<ApiResponse<VerifyMessageData>> {
+pub async fn verify_message(
+    Json(payload): Json<VerifyMessageRequest>,
+) -> (StatusCode, Json<ApiResponse<VerifyMessageData>>) {
     if payload.message.is_empty() || payload.signature.is_empty() || payload.pubkey.is_empty() {
-        return Json(error("Missing required fields"));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(error("Missing required fields")),
+        );
     }
 
     let pubkey = match Pubkey::from_str(&payload.pubkey) {
         Ok(pk) => pk,
-        Err(_) => return Json(error("Invalid base58 public key")),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(error("Invalid base58 public key")),
+            );
+        }
     };
 
     let signature_bytes = match general_purpose::STANDARD.decode(&payload.signature) {
         Ok(bytes) => bytes,
-        Err(_) => return Json(error("Invalid base64 signature")),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(error("Invalid base64 signature")),
+            );
+        }
     };
 
     let signature = match Signature::try_from(signature_bytes.as_slice()) {
         Ok(sig) => sig,
-        Err(_) => return Json(error("Invalid signature format")),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(error("Invalid signature format")),
+            );
+        }
     };
 
     let valid = signature.verify(pubkey.as_ref(), payload.message.as_bytes());
 
-    Json(success(VerifyMessageData {
-        valid,
-        message: payload.message,
-        pubkey: payload.pubkey,
-    }))
+    (
+        StatusCode::OK,
+        Json(success(VerifyMessageData {
+            valid,
+            message: payload.message,
+            pubkey: payload.pubkey,
+        })),
+    )
 }

@@ -48,7 +48,7 @@ pub async fn send_sol(
     if payload.lamports == 0 {
         return (
             StatusCode::BAD_REQUEST,
-            Json(error::<SendSolData>("Lamports must be greater than 0")),
+            Json(error::<SendSolData>("Amount must be greater than 0")),
         );
     }
 
@@ -83,7 +83,8 @@ pub struct SendTokenData {
 #[derive(Serialize)]
 pub struct SendTokenAccountMeta {
     pubkey: String,
-    isSigner: bool,
+    #[serde(rename = "isSigner")]
+    is_signer: bool,
 }
 
 pub async fn send_token(
@@ -156,7 +157,7 @@ pub async fn send_token(
         .into_iter()
         .map(|meta| SendTokenAccountMeta {
             pubkey: meta.pubkey.to_string(),
-            isSigner: meta.is_signer,
+            is_signer: meta.is_signer,
         })
         .collect();
 

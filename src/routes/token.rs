@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use axum::Json;
+use axum::{Json, http::StatusCode};
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
 use spl_token::instruction::{initialize_mint, mint_to};
@@ -12,7 +12,8 @@ use crate::response::{ApiResponse, success, error};
 
 #[derive(Debug, Deserialize)]
 pub struct CreateTokenRequest {
-    mintAuthority: String,
+    #[serde(rename = "mintAuthority")]
+    mint_authority: String,
     mint: String,
     decimals: u8,
 }
@@ -31,15 +32,27 @@ pub struct TokenInstructionData {
     instruction_data: String,
 }
 
-pub async fn create_token(Json(payload): Json<CreateTokenRequest>) -> Json<ApiResponse<TokenInstructionData>> {
+pub async fn create_token(
+    Json(payload): Json<CreateTokenRequest>,
+) -> (StatusCode, Json<ApiResponse<TokenInstructionData>>) {
     let mint_pubkey = match Pubkey::from_str(&payload.mint) {
         Ok(pk) => pk,
-        Err(_) => return Json(error("Invalid mint pubkey")),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(error("Invalid mint pubkey")),
+            );
+        }
     };
 
-    let authority_pubkey = match Pubkey::from_str(&payload.mintAuthority) {
+    let authority_pubkey = match Pubkey::from_str(&payload.mint_authority) {
         Ok(pk) => pk,
-        Err(_) => return Json(error("Invalid mint authority pubkey")),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(error("Invalid mint authority pubkey")),
+            );
+        }
     };
 
     let ix = match initialize_mint(
@@ -50,7 +63,12 @@ pub async fn create_token(Json(payload): Json<CreateTokenRequest>) -> Json<ApiRe
         payload.decimals,
     ) {
         Ok(i) => i,
-        Err(_) => return Json(error("Failed to create mint instruction")),
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(error("Failed to create mint instruction")),
+            );
+        }
     };
 
     let instruction_data = general_purpose::STANDARD.encode(ix.data);
@@ -61,11 +79,14 @@ pub async fn create_token(Json(payload): Json<CreateTokenRequest>) -> Json<ApiRe
         is_writable: a.is_writable,
     }).collect();
 
-    Json(success(TokenInstructionData {
-        program_id: ix.program_id.to_string(),
-        accounts,
-        instruction_data,
-    }))
+    (
+        StatusCode::OK,
+        Json(success(TokenInstructionData {
+            program_id: ix.program_id.to_string(),
+            accounts,
+            instruction_data,
+        })),
+    )
 }
 
 #[derive(Debug, Deserialize)]
@@ -83,21 +104,45 @@ pub struct MintTokenData {
     instruction_data: String,
 }
 
-pub async fn mint_token(Json(payload): Json<MintTokenRequest>) -> Json<ApiResponse<MintTokenData>> {
+pub async fn mint_token(
+    Json(payload): Json<MintTokenRequest>,
+) -> (StatusCode, Json<ApiResponse<MintTokenData>>) {
     let mint = match Pubkey::from_str(&payload.mint) {
         Ok(pk) => pk,
-        Err(_) => return Json(error("Invalid mint address")),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(error("Invalid mint address")),
+            );
+        }
     };
 
     let destination = match Pubkey::from_str(&payload.destination) {
         Ok(pk) => pk,
-        Err(_) => return Json(error("Invalid destination address")),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(error("Invalid destination address")),
+            );
+        }
     };
 
     let authority = match Pubkey::from_str(&payload.authority) {
         Ok(pk) => pk,
-        Err(_) => return Json(error("Invalid authority address")),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(error("Invalid authority address")),
+            );
+        }
     };
+
+    if payload.amount == 0 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(error("Amount must be greater than 0")),
+        );
+    }
 
     let ix = match mint_to(
         &TOKEN_PROGRAM_ID,
@@ -108,7 +153,12 @@ pub async fn mint_token(Json(payload): Json<MintTokenRequest>) -> Json<ApiRespon
         payload.amount,
     ) {
         Ok(ix) => ix,
-        Err(_) => return Json(error("Failed to build mint instruction")),
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(error("Failed to build mint instruction")),
+            );
+        }
     };
 
     let encoded_data = general_purpose::STANDARD.encode(ix.data);
@@ -119,9 +169,12 @@ pub async fn mint_token(Json(payload): Json<MintTokenRequest>) -> Json<ApiRespon
         is_writable: a.is_writable,
     }).collect();
 
-    Json(success(MintTokenData {
-        program_id: ix.program_id.to_string(),
-        accounts,
-        instruction_data: encoded_data,
-    }))
+    (
+        StatusCode::OK,
+        Json(success(MintTokenData {
+            program_id: ix.program_id.to_string(),
+            accounts,
+            instruction_data: encoded_data,
+        })),
+    )
 }
