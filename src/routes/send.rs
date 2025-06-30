@@ -80,6 +80,7 @@ pub struct SendTokenData {
     instruction_data: String,
 }
 
+// Note: Send token accounts only have pubkey and isSigner, NO is_writable field!
 #[derive(Serialize)]
 pub struct SendTokenAccountMeta {
     pubkey: String,
@@ -152,6 +153,7 @@ pub async fn send_token(
 
     let encoded_data = general_purpose::STANDARD.encode(&ix.data);
 
+    // Only include pubkey and isSigner - NO is_writable for send token!
     let accounts: Vec<SendTokenAccountMeta> = ix
         .accounts
         .into_iter()

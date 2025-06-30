@@ -1,4 +1,4 @@
-use axum::{Router, routing::post};
+use axum::{Router, routing::post, http::StatusCode};
 use std::env;
 
 mod routes;
@@ -24,7 +24,6 @@ async fn main() {
     let addr = format!("0.0.0.0:{}", port);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
 
-  
     println!("Server running at http://{}/", addr);
     axum::serve(listener, app).await.unwrap();
 }
