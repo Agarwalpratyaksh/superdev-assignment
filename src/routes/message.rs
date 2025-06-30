@@ -1,5 +1,5 @@
 use axum::{Json, http::StatusCode};
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use bs58;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
@@ -8,7 +8,7 @@ use solana_sdk::{
 };
 use std::{convert::TryInto, str::FromStr};
 
-use crate::response::{ApiResponse, success, error};
+use crate::response::{ApiResponse, error, success};
 
 #[derive(Debug, Deserialize)]
 pub struct SignMessageRequest {
@@ -46,10 +46,7 @@ pub async fn sign_message(
     let secret: [u8; 64] = match decoded.as_slice().try_into() {
         Ok(arr) => arr,
         Err(_) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(error("Invalid key length")),
-            );
+            return (StatusCode::BAD_REQUEST, Json(error("Invalid key length")));
         }
     };
 
